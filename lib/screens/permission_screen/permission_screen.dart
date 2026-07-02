@@ -17,7 +17,6 @@ class _PermissionRequestScreenState extends State<PermissionRequestScreen> {
   bool _isLoading = false;
   Map<Permission, PermissionStatus>? _permissionStatuses;
 
-  // Permission display configuration
   final Map<Permission, Map<String, dynamic>> _permissionConfig = {
     Permission.camera: {
       'icon': Icons.camera_alt,
@@ -49,15 +48,12 @@ class _PermissionRequestScreenState extends State<PermissionRequestScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // Request all permissions
       final statuses = await StreamPermissionManager.requestAllPermissions();
 
       setState(() {
         _permissionStatuses = statuses;
         _isLoading = false;
       });
-
-      // Check if all granted
       if (StreamPermissionManager.areAllPermissionsGranted()) {
         widget.onPermissionsGranted();
       }
@@ -73,7 +69,6 @@ class _PermissionRequestScreenState extends State<PermissionRequestScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // Get only denied permissions
       final deniedPermissions = StreamPermissionManager.getDeniedPermissions();
 
       if (deniedPermissions.isEmpty) {
@@ -84,14 +79,12 @@ class _PermissionRequestScreenState extends State<PermissionRequestScreen> {
         return;
       }
 
-      // Request only denied permissions
       final newStatuses =
           await StreamPermissionManager.requestSpecificPermissions(
             deniedPermissions,
           );
 
       setState(() {
-        // Update statuses
         if (_permissionStatuses != null) {
           _permissionStatuses!.addAll(newStatuses);
         }
