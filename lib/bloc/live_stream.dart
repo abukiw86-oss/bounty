@@ -23,7 +23,6 @@ class StreamLiveBloc extends Bloc<StreamLiveEvent, StreamLiveState> {
 
   StreamLiveBloc(this.repository)
     : super(StreamLiveState(status: StreamLiveStatus.initial)) {
-    // Register background metric pipe updates
     repository.onViewerCountChanged = (count) {
       add(_UpdateViewerCountEvent(count));
     };
@@ -31,7 +30,7 @@ class StreamLiveBloc extends Bloc<StreamLiveEvent, StreamLiveState> {
     on<InitStreamSetupEvent>((event, emit) async {
       emit(state.copyWith(status: StreamLiveStatus.loading));
       try {
-        repository.initializeSocket('http://192.168.43.124:3000');
+        repository.initializeSocket('wss://bounty-n8fj.onrender.com/');
         await repository.initializeCamera();
         emit(state.copyWith(status: StreamLiveStatus.ready));
       } catch (e) {

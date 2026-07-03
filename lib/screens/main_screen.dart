@@ -2,37 +2,29 @@
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import '../infrastructure/stream_repository.dart';
 import '../bloc/live_stream.dart';
-import 'package:hvc_net/state/stream_state.dart';
+import '../infrastructure/stream_repository.dart';
+import '../state/stream_state.dart';
 
 class TikTokLivePage extends StatelessWidget {
-  const TikTokLivePage({Key? key}) : super(key: key);
+  const TikTokLivePage({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return RepositoryProvider(
-      create: (context) => StreamRepository(),
-      child: BlocProvider(
-        create: (context) =>
-            StreamLiveBloc(context.read<StreamRepository>())
-              ..add(InitStreamSetupEvent()),
-        child: Scaffold(
-          backgroundColor: Colors.black,
-          body: Stack(
-            children: [
-              const FullScreenCameraPreview(),
-              const TikTokInteractionOverlay(),
-            ],
-          ),
-        ),
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Stack(
+        children: [
+          const FullScreenCameraPreview(),
+          const TikTokInteractionOverlay(),
+        ],
       ),
     );
   }
 }
 
 class FullScreenCameraPreview extends StatelessWidget {
-  const FullScreenCameraPreview({Key? key}) : super(key: key);
+  const FullScreenCameraPreview({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -45,6 +37,7 @@ class FullScreenCameraPreview extends StatelessWidget {
           );
         }
         if (state.status == StreamLiveStatus.error) {
+          print(state.error);
           return Center(
             child: Text(
               "Hardware Error: ${state.error}",
@@ -55,7 +48,14 @@ class FullScreenCameraPreview extends StatelessWidget {
         if (state.status == StreamLiveStatus.live ||
             state.status == StreamLiveStatus.ready) {
           final controller = context.read<StreamRepository>().controller;
-          if (controller == null) return const SizedBox();
+          if (controller == null || !controller.value.isInitialized) {
+            return const Center(
+              child: Text(
+                "Initializing Camera...",
+                style: TextStyle(color: Colors.white),
+              ),
+            );
+          }
 
           return SizedBox.expand(
             child: FittedBox(
@@ -80,7 +80,7 @@ class FullScreenCameraPreview extends StatelessWidget {
 }
 
 class TikTokInteractionOverlay extends StatelessWidget {
-  const TikTokInteractionOverlay({Key? key}) : super(key: key);
+  const TikTokInteractionOverlay({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -143,29 +143,6 @@ class TikTokInteractionOverlay extends StatelessWidget {
                 return Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
-                    if (state.status == StreamLiveStatus.ready)
-                      ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.pinkAccent,
-                          shape: const StadiumBorder(),
-                        ),
-                        onPressed: () => context.read<StreamLiveBloc>().add(
-                          StartBroadcastEvent(),
-                        ),
-                        child: const Padding(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: 24,
-                            vertical: 12,
-                          ),
-                          child: Text(
-                            "GO LIVE",
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ),
                     if (state.status == StreamLiveStatus.live) ...[
                       IconButton(
                         icon: Icon(
@@ -183,8 +160,37 @@ class TikTokInteractionOverlay extends StatelessWidget {
                           color: Colors.redAccent,
                           size: 48,
                         ),
-                        onPressed: () => context.read<StreamLiveBloc>().add(
-                          StopBroadcastEvent(),
+                        onPressed: () {
+                          context.read<StreamLiveBloc>().add(
+                            StopBroadcastEvent(),
+                          );
+                        },
+                      ),
+                    ],
+                    if (state.status == StreamLiveStatus.ready) ...[
+                      ElevatedButton(
+                        onPressed: () {
+                          context.read<StreamLiveBloc>().add(
+                            StartBroadcastEvent(),
+                          );
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.pinkAccent,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 30,
+                            vertical: 12,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                        ),
+                        child: const Text(
+                          'Go Live',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
                         ),
                       ),
                     ],

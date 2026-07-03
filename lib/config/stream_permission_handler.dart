@@ -5,25 +5,32 @@ class StreamPermissionManager {
   static PermissionStatus? microphoneStatus;
   static PermissionStatus? locationStatus;
 
-  static Future<Map<Permission, PermissionStatus>>
-  requestAllPermissions() async {
-    Map<Permission, PermissionStatus> statuses = await [
+  // Check if all permissions are granted
+  static bool areAllPermissionsGranted() {
+    bool coreGranted =
+        cameraStatus?.isGranted == true &&
+        microphoneStatus?.isGranted == true &&
+        locationStatus?.isGranted == true;
+
+    return coreGranted;
+  }
+
+  static Future<bool> requestAllPermissions({
+    bool requestNotification = false,
+  }) async {
+    List<Permission> permissions = [
       Permission.camera,
       Permission.microphone,
       Permission.location,
-    ].request();
+    ];
+
+    Map<Permission, PermissionStatus> statuses = await permissions.request();
 
     cameraStatus = statuses[Permission.camera];
     microphoneStatus = statuses[Permission.microphone];
     locationStatus = statuses[Permission.location];
 
-    return statuses;
-  }
-
-  static bool areAllPermissionsGranted() {
-    return cameraStatus?.isGranted == true &&
-        microphoneStatus?.isGranted == true &&
-        locationStatus?.isGranted == true;
+    return areAllPermissionsGranted();
   }
 
   static List<Permission> getDeniedPermissions() {
@@ -38,7 +45,6 @@ class StreamPermissionManager {
     if (locationStatus != null && !locationStatus!.isGranted) {
       denied.add(Permission.location);
     }
-
     return denied;
   }
 
@@ -56,22 +62,6 @@ class StreamPermissionManager {
     }
 
     return permanentlyDenied;
-  }
-
-  static Future<Map<Permission, PermissionStatus>> requestSpecificPermissions(
-    List<Permission> permissions,
-  ) async {
-    if (permissions.isEmpty) return {};
-
-    Map<Permission, PermissionStatus> statuses = await permissions.request();
-
-    statuses.forEach((permission, status) {
-      if (permission == Permission.camera) cameraStatus = status;
-      if (permission == Permission.microphone) microphoneStatus = status;
-      if (permission == Permission.location) locationStatus = status;
-    });
-
-    return statuses;
   }
 
   static void resetStatuses() {

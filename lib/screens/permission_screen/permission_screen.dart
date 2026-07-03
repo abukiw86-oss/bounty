@@ -1,20 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:hvc_net/bloc/live_stream.dart';
+import '/infrastructure/stream_repository.dart';
+import 'package:hvc_net/screens/main_screen.dart';
 import 'package:hvc_net/config/stream_permission_handler.dart';
 
-class PermissionRequestScreen extends StatefulWidget {
-  final VoidCallback onPermissionsGranted;
-
-  const PermissionRequestScreen({Key? key, required this.onPermissionsGranted})
-    : super(key: key);
+class PermissionCheckPage extends StatefulWidget {
+  const PermissionCheckPage({super.key});
 
   @override
-  State<PermissionRequestScreen> createState() =>
-      _PermissionRequestScreenState();
+  State<PermissionCheckPage> createState() => _PermissionCheckPageState();
 }
 
-class _PermissionRequestScreenState extends State<PermissionRequestScreen> {
+class _PermissionCheckPageState extends State<PermissionCheckPage> {
   bool _isLoading = false;
+  bool _allPermissionsGranted = false;
   Map<Permission, PermissionStatus>? _permissionStatuses;
 
   final Map<Permission, Map<String, dynamic>> _permissionConfig = {
@@ -23,18 +24,21 @@ class _PermissionRequestScreenState extends State<PermissionRequestScreen> {
       'title': 'Camera',
       'description': 'Required for video streaming',
       'color': Colors.blue,
+      'required': true,
     },
     Permission.microphone: {
       'icon': Icons.mic,
       'title': 'Microphone',
       'description': 'Required for audio streaming',
       'color': Colors.green,
+      'required': true,
     },
     Permission.location: {
       'icon': Icons.location_on,
       'title': 'Location',
-      'description': 'Required for location-based features',
+      'description': 'Required for location features',
       'color': Colors.orange,
+      'required': true,
     },
   };
 
@@ -48,15 +52,17 @@ class _PermissionRequestScreenState extends State<PermissionRequestScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final statuses = await StreamPermissionManager.requestAllPermissions();
+      bool allGranted = await StreamPermissionManager.requestAllPermissions(
+        requestNotification: true,
+      );
 
       setState(() {
-        _permissionStatuses = statuses;
         _isLoading = false;
+        _allPermissionsGranted = allGranted;
+        if (allGranted) {
+          _startStreaming();
+        }
       });
-      if (StreamPermissionManager.areAllPermissionsGranted()) {
-        widget.onPermissionsGranted();
-      }
     } catch (e) {
       setState(() => _isLoading = false);
       ScaffoldMessenger.of(
@@ -74,28 +80,26 @@ class _PermissionRequestScreenState extends State<PermissionRequestScreen> {
       if (deniedPermissions.isEmpty) {
         setState(() => _isLoading = false);
         if (StreamPermissionManager.areAllPermissionsGranted()) {
-          widget.onPermissionsGranted();
+          _startStreaming();
         }
         return;
       }
 
-      final newStatuses =
-          await StreamPermissionManager.requestSpecificPermissions(
-            deniedPermissions,
-          );
+      // Request only denied permissions
+      final statuses = await deniedPermissions.request();
 
       setState(() {
-        if (_permissionStatuses != null) {
-          _permissionStatuses!.addAll(newStatuses);
-        }
+        _permissionStatuses ??= {};
+        _permissionStatuses!.addAll(statuses);
         _isLoading = false;
+        _allPermissionsGranted =
+            StreamPermissionManager.areAllPermissionsGranted();
       });
 
-      // Check if all granted now
-      if (StreamPermissionManager.areAllPermissionsGranted()) {
-        widget.onPermissionsGranted();
+      if (_allPermissionsGranted) {
+        _startStreaming();
       } else {
-        _showPermissionStatusDialog();
+        _showPermissionDialog();
       }
     } catch (e) {
       setState(() => _isLoading = false);
@@ -105,7 +109,7 @@ class _PermissionRequestScreenState extends State<PermissionRequestScreen> {
     }
   }
 
-  void _showPermissionStatusDialog() {
+  void _showPermissionDialog() {
     final permanentlyDenied =
         StreamPermissionManager.getPermanentlyDeniedPermissions();
 
@@ -200,7 +204,7 @@ class _PermissionRequestScreenState extends State<PermissionRequestScreen> {
         actions: [
           if (permanentlyDenied.isEmpty) ...[
             TextButton(
-              onPressed: () => _requestMissingPermissions(),
+              onPressed: _requestMissingPermissions,
               child: const Text('Try Again'),
             ),
           ],
@@ -213,32 +217,60 @@ class _PermissionRequestScreenState extends State<PermissionRequestScreen> {
     );
   }
 
+  void _startStreaming() {
+    // Navigate to streaming page with BLoC already initialized
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (context) => RepositoryProvider(
+          create: (context) => StreamRepository(),
+          child: BlocProvider(
+            create: (context) =>
+                StreamLiveBloc(context.read<StreamRepository>())
+                  ..add(InitStreamSetupEvent()),
+            child: const TikTokLivePage(),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Permissions Required'),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-      ),
+      backgroundColor: Colors.black,
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(color: Colors.pinkAccent),
+                  SizedBox(height: 20),
+                  Text(
+                    'Checking permissions...',
+                    style: TextStyle(color: Colors.white),
+                  ),
+                ],
+              ),
+            )
           : SafeArea(
               child: Padding(
                 padding: const EdgeInsets.all(24.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    const SizedBox(height: 40),
                     const Text(
-                      'Streaming Permissions',
+                      'Welcome to HVC.NET',
                       style: TextStyle(
-                        fontSize: 28,
+                        fontSize: 32,
                         fontWeight: FontWeight.bold,
+                        color: Colors.white,
                       ),
                     ),
                     const SizedBox(height: 8),
                     const Text(
-                      'Please grant the following permissions to start streaming',
+                      'Please grant permissions to start streaming',
                       style: TextStyle(fontSize: 16, color: Colors.grey),
                     ),
                     const SizedBox(height: 32),
@@ -247,33 +279,105 @@ class _PermissionRequestScreenState extends State<PermissionRequestScreen> {
                       final config = entry.value;
                       final isGranted =
                           _permissionStatuses?[permission]?.isGranted ?? false;
-                      final isDenied =
-                          _permissionStatuses?[permission]?.isDenied ?? false;
-                      final isPermanentlyDenied =
-                          _permissionStatuses?[permission]
-                              ?.isPermanentlyDenied ??
-                          false;
 
-                      return PermissionTile(
-                        icon: config['icon'],
-                        title: config['title'],
-                        description: config['description'],
-                        color: config['color'],
-                        status: _permissionStatuses?[permission],
-                        onRetry: () => _requestMissingPermissions(),
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          border: Border.all(
+                            color: isGranted
+                                ? Colors.green
+                                : Colors.grey.shade800,
+                            width: 1.5,
+                          ),
+                          borderRadius: BorderRadius.circular(12),
+                          color: isGranted
+                              ? Colors.green.withOpacity(0.1)
+                              : null,
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: (config['color'] as Color).withOpacity(
+                                  0.1,
+                                ),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Icon(
+                                config['icon'],
+                                color: config['color'],
+                                size: 28,
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Text(
+                                        config['title'],
+                                        style: const TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      if (config['required'] == true)
+                                        const Text(
+                                          '*',
+                                          style: TextStyle(
+                                            color: Colors.red,
+                                            fontSize: 16,
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    config['description'],
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: Colors.grey[600],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            if (isGranted)
+                              const Icon(
+                                Icons.check_circle,
+                                color: Colors.green,
+                                size: 24,
+                              )
+                            else
+                              const Icon(
+                                Icons.pending,
+                                color: Colors.grey,
+                                size: 24,
+                              ),
+                          ],
+                        ),
                       );
                     }).toList(),
                     const Spacer(),
-                    if (StreamPermissionManager.areAllPermissionsGranted())
+                    if (_allPermissionsGranted)
                       ElevatedButton(
-                        onPressed: widget.onPermissionsGranted,
+                        onPressed: _startStreaming,
                         style: ElevatedButton.styleFrom(
                           minimumSize: const Size(double.infinity, 54),
                           backgroundColor: Colors.green,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
                         ),
                         child: const Text(
                           'Continue to Stream',
-                          style: TextStyle(fontSize: 18),
+                          style: TextStyle(fontSize: 18, color: Colors.white),
                         ),
                       )
                     else
@@ -281,104 +385,21 @@ class _PermissionRequestScreenState extends State<PermissionRequestScreen> {
                         onPressed: _requestMissingPermissions,
                         style: ElevatedButton.styleFrom(
                           minimumSize: const Size(double.infinity, 54),
+                          backgroundColor: Colors.pinkAccent,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
                         ),
                         child: const Text(
                           'Grant Permissions',
-                          style: TextStyle(fontSize: 18),
+                          style: TextStyle(fontSize: 18, color: Colors.white),
                         ),
                       ),
+                    const SizedBox(height: 20),
                   ],
                 ),
               ),
             ),
-    );
-  }
-}
-
-// Custom Permission Tile Widget
-class PermissionTile extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String description;
-  final Color color;
-  final PermissionStatus? status;
-  final VoidCallback onRetry;
-
-  const PermissionTile({
-    Key? key,
-    required this.icon,
-    required this.title,
-    required this.description,
-    required this.color,
-    this.status,
-    required this.onRetry,
-  }) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    final isGranted = status?.isGranted ?? false;
-    final isDenied = status?.isDenied ?? false;
-    final isPermanentlyDenied = status?.isPermanentlyDenied ?? false;
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        border: Border.all(
-          color: isGranted ? Colors.green : Colors.grey.shade300,
-          width: 1.5,
-        ),
-        borderRadius: BorderRadius.circular(12),
-        color: isGranted ? Colors.green.withOpacity(0.05) : null,
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(icon, color: color, size: 28),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  description,
-                  style: TextStyle(fontSize: 14, color: Colors.grey[600]),
-                ),
-              ],
-            ),
-          ),
-          if (isGranted)
-            const Icon(Icons.check_circle, color: Colors.green, size: 28)
-          else if (isPermanentlyDenied)
-            IconButton(
-              icon: const Icon(Icons.settings, color: Colors.red),
-              onPressed: () => openAppSettings(),
-              tooltip: 'Open settings',
-            )
-          else if (isDenied)
-            IconButton(
-              icon: const Icon(Icons.refresh, color: Colors.orange),
-              onPressed: onRetry,
-              tooltip: 'Request permission',
-            )
-          else
-            const Icon(Icons.pending, color: Colors.grey, size: 28),
-        ],
-      ),
     );
   }
 }

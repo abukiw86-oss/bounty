@@ -7,19 +7,16 @@ environment:
   sdk: ^3.12.2 
 dependencies:
   flutter:
-    sdk: flutter
-
-  # Real-Time Data Plane (Pick one based on backend complexity)
-  # web_socket_channel: ^3.0.0 # Standard low-level raw WebSockets
-  socket_io_client: ^3.1.2    
+    sdk: flutter 
   camera: ^0.11.0   
   flutter_webrtc: ^1.4.1  
   permission_handler: ^11.3.1   
-  flutter_foreground_task: ^8.1.0  
- 
-  flutter_image_compress: ^2.3.0  
+  flutter_foreground_task: ^8.1.0    
   cupertino_icons: ^1.0.8
   flutter_bloc: ^9.1.1
+  web_socket_channel: ^3.0.3
+  image: ^4.9.1 
+  record: ^7.1.1
 
 dev_dependencies:
   flutter_test:

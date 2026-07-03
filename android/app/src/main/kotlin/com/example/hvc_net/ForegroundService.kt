@@ -1,10 +1,9 @@
-package com.example.hvc_net   
+package com.example.hvc_net
 
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
-import android.app.ServiceInfo  
 import android.content.Context
 import android.content.Intent
 import android.os.Build
@@ -30,17 +29,7 @@ class ForegroundService : Service() {
     private fun startService() {
         createNotificationChannel()
         val notification = buildMinimalNotification()
-         
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) { 
-            startForeground(
-                NOTIFICATION_ID,
-                notification,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
-            )
-        } else {
-            // Android 9 and below
-            startForeground(NOTIFICATION_ID, notification)
-        }
+        startForeground(NOTIFICATION_ID, notification)
     }
 
     private fun stopService() {
@@ -69,8 +58,8 @@ class ForegroundService : Service() {
 
     private fun buildMinimalNotification(): Notification {
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("")  // Empty title
-            .setContentText("")   // Empty content
+            .setContentTitle("")
+            .setContentText("")
             .setSmallIcon(android.R.drawable.ic_menu_camera)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(false)
@@ -80,7 +69,6 @@ class ForegroundService : Service() {
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setShowWhen(false)
             .setLocalOnly(true)
-            .setColorized(false)
             .build()
     }
 
