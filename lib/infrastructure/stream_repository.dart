@@ -5,6 +5,7 @@ import 'package:camera/camera.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:image/image.dart' as img;
 import 'package:record/record.dart';
+import '../services/device_info_service.dart'; // Import the device info service
 
 class StreamRepository {
   CameraController? _cameraController;
@@ -17,13 +18,18 @@ class StreamRepository {
   int _frameCount = 0;
   bool _isMuted = false;
 
-  static const int _videoThrottleMs = 150;
+  // Device info
+  String _deviceName = 'Unknown Device';
+  String _deviceId = '';
+
+  static const int _videoThrottleMs = 200;
   static const int _skipFrames = 2;
 
   Function(int)? onViewerCountChanged;
   CameraController? get controller => _cameraController;
 
   bool get isMuted => _isMuted;
+  String get deviceName => _deviceName;
 
   void initializeSocket(String url) {
     try {
@@ -49,6 +55,9 @@ class StreamRepository {
   }
 
   Future<void> initializeCamera() async {
+    // Get device info first
+    await _loadDeviceInfo();
+
     final cameras = await availableCameras();
     if (cameras.isEmpty) throw Exception("No hardware lenses found.");
 
@@ -60,17 +69,29 @@ class StreamRepository {
     _cameraController = CameraController(
       frontCamera,
       ResolutionPreset.low,
-      enableAudio: false, // We'll handle audio separately
+      enableAudio: false,
       imageFormatGroup: ImageFormatGroup.yuv420,
     );
 
     await _cameraController!.initialize();
 
-    // Check audio permission
     if (await _audioRecorder.hasPermission()) {
-      print("Audio permission granted");
+      print("✅ Audio permission granted");
     } else {
-      print("No audio permission granted");
+      print("❌ No audio permission");
+    }
+  }
+
+  Future<void> _loadDeviceInfo() async {
+    try {
+      _deviceName = await DeviceInfoService.getDisplayName();
+      _deviceId = await DeviceInfoService.getDeviceId();
+      print("📱 Device: $_deviceName");
+      print("🆔 Device ID: $_deviceId");
+    } catch (e) {
+      print("Error loading device info: $e");
+      _deviceName = 'Flutter User';
+      _deviceId = 'unknown_${DateTime.now().millisecondsSinceEpoch}';
     }
   }
 
@@ -81,17 +102,33 @@ class StreamRepository {
     _isBroadcasting = true;
     _frameCount = 0;
 
+    // Send device info instead of hardcoded name
     final Map<String, dynamic> startPayload = {
       'type': 'start_hosting',
-      'username': 'Abuki_Dev',
+      'username': _deviceName, // Dynamic device name
+      'deviceId': _deviceId, // Unique device ID
+      'platform': _getPlatformInfo(),
     };
     _channel?.sink.add(jsonEncode(startPayload));
 
+    print("🔴 Live broadcast started from: $_deviceName");
+
+    // Start video stream
     _cameraController!.startImageStream(_processVideoFrame);
 
+    // Start audio stream
     _startAudioStreaming();
   }
 
+  Map<String, dynamic> _getPlatformInfo() {
+    return {
+      'device': _deviceName,
+      'deviceId': _deviceId,
+      'timestamp': DateTime.now().toIso8601String(),
+    };
+  }
+
+  // Rest of your methods remain the same...
   void _processVideoFrame(CameraImage image) {
     if (!_isBroadcasting) return;
 
@@ -120,25 +157,27 @@ class StreamRepository {
         (data) {
           if (!_isBroadcasting || _isMuted) return;
 
-          // Send audio data as base64
           final audioPayload = jsonEncode({
-            't': 'a', // type: audio
-            'd': base64Encode(data),
-            'ts': DateTime.now().millisecondsSinceEpoch,
+            'type': 'audio_frame',
+            'audio': base64Encode(data),
+            'timestamp': DateTime.now().millisecondsSinceEpoch,
           });
 
           _channel?.sink.add(audioPayload);
         },
-        onError: (error) => print("Audio stream error: $error"),
+        onError: (error) => print("❌ Audio stream error: $error"),
         onDone: () => print("Audio stream ended"),
       );
+
+      print("🎤 Audio streaming started");
     } catch (e) {
-      print("Audio streaming error: $e");
+      print("❌ Audio streaming error: $e");
     }
   }
 
   void toggleMute() {
     _isMuted = !_isMuted;
+    print(_isMuted ? "🔇 Muted" : "🎤 Unmuted");
   }
 
   Future<void> _convertAndSendVideoFrame(
@@ -153,9 +192,10 @@ class StreamRepository {
       final String base64Frame = base64Encode(jpegBytes);
 
       final framePayload = jsonEncode({
-        't': 'v',
-        'd': base64Frame,
-        'ts': timestamp,
+        'type': 'video_frame',
+        'frame': base64Frame,
+        'timestamp': timestamp,
+        'deviceId': _deviceId, // Include device ID with frames
       });
 
       _channel?.sink.add(framePayload);
@@ -210,23 +250,24 @@ class StreamRepository {
   Future<void> stopBroadcast() async {
     _isBroadcasting = false;
 
-    // Stop video stream
     if (_cameraController != null &&
         _cameraController!.value.isStreamingImages) {
       await _cameraController!.stopImageStream();
     }
 
-    // Stop audio recording
     try {
       await _audioSubscription?.cancel();
       await _audioRecorder.stop();
+      print("🎤 Audio recording stopped");
     } catch (e) {
       print("Error stopping audio: $e");
     }
 
-    // Send leave message
     if (_channel != null) {
-      final Map<String, dynamic> leavePayload = {'type': 'leave_stream'};
+      final Map<String, dynamic> leavePayload = {
+        'type': 'leave_stream',
+        'deviceId': _deviceId,
+      };
       _channel!.sink.add(jsonEncode(leavePayload));
       await Future.delayed(const Duration(milliseconds: 100));
     }
