@@ -1,7 +1,7 @@
 const { WebSocketServer } = require('ws');
 
 const wss = new WebSocketServer({ host: '0.0.0.0', port: 3000 });
-console.log('🚀 TikTok Live Router Running on ws://localhost:3000');
+console.log('🚀 Live Router Running ...');
  
 const activeStreams = new Map();
 
@@ -26,8 +26,7 @@ wss.on('connection', (ws) => {
                     sendLiveListUpdates();
                     break;
 
-                case 'video_frame': 
-                    // Relay video frames to viewers
+                case 'video_frame':  
                     wss.clients.forEach((client) => {
                         if (client !== ws && 
                             client.readyState === 1 && 
@@ -40,8 +39,7 @@ wss.on('connection', (ws) => {
                     });
                     break;
 
-                case 'audio_frame':  // NEW: Handle audio frames
-                    // Relay audio frames to viewers
+                case 'audio_frame':  
                     wss.clients.forEach((client) => {
                         if (client !== ws && 
                             client.readyState === 1 && 
@@ -56,37 +54,31 @@ wss.on('connection', (ws) => {
 
                 case 'join_as_viewer': 
                     ws.watchingStreamId = data.streamId;
-                    console.log(`👁️ Viewer joined stream: ${data.streamId}`);
-                    
-                    // Send viewer count update to broadcaster
+                    console.log(`👁️ Viewer joined stream: ${data.streamId}`); 
                     updateViewerCount(data.streamId);
                     break;
 
                 case 'leave_stream':
                     const streamId = ws.watchingStreamId;
                     ws.watchingStreamId = null;
-                    console.log(`👋 Viewer left stream: ${streamId}`);
-                    
-                    // Update viewer count
+                    console.log(`👋 Viewer left stream: ${streamId}`); 
                     if (streamId) {
                         updateViewerCount(streamId);
                     }
                     break;
-                case 'get_live_list':
-                    // Send current live list to the requesting client
+                case 'get_live_list': 
                     const list = Array.from(activeStreams.values());
                     ws.send(JSON.stringify({ 
                         type: 'live_list_update', 
                         streams: list 
                     }));
                     break;
-                case 'location_update':
-                    // Update stream location
+                case 'location_update': 
                     if (activeStreams.has(ws.id)) {
                         const stream = activeStreams.get(ws.id);
                         stream.location = data.location;
                         activeStreams.set(ws.id, stream);
-                        sendLiveListUpdates(); // Notify viewers of location change
+                        sendLiveListUpdates();  
                     }
                     break;
             }
@@ -125,17 +117,13 @@ function sendLiveListUpdates() {
 }
  
 function updateViewerCount(streamId) {
-    if (!streamId) return;
-    
-    // Count viewers for this stream
+    if (!streamId) return; 
     let viewerCount = 0;
     wss.clients.forEach((client) => {
         if (client.watchingStreamId === streamId && client.readyState === 1) {
             viewerCount++;
         }
-    });
-    
-    // Find the broadcaster and send the count
+    }); 
     wss.clients.forEach((client) => {
         if (client.id === streamId && client.readyState === 1) {
             client.send(JSON.stringify({
