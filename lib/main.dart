@@ -2,7 +2,8 @@
 import 'package:flutter/material.dart';
 import 'package:hvc_net/screens/permission_screen/permission_screen.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
   runApp(const MyApp());
 }
 

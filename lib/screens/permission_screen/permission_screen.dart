@@ -41,7 +41,6 @@ class _PermissionCheckPageState extends State<PermissionCheckPage> {
       'required': true,
     },
   };
-
   @override
   void initState() {
     super.initState();
@@ -128,32 +127,28 @@ class _PermissionCheckPageState extends State<PermissionCheckPage> {
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
-              ...permanentlyDenied
-                  .map(
-                    (permission) => Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 4),
-                      child: Row(
-                        children: [
-                          Icon(
-                            _permissionConfig[permission]?['icon'],
-                            color: _permissionConfig[permission]?['color'],
-                            size: 20,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              _permissionConfig[permission]?['title'] ??
-                                  permission.toString(),
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ),
-                        ],
+              ...permanentlyDenied.map(
+                (permission) => Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Row(
+                    children: [
+                      Icon(
+                        _permissionConfig[permission]?['icon'],
+                        color: _permissionConfig[permission]?['color'],
+                        size: 20,
                       ),
-                    ),
-                  )
-                  .toList(),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _permissionConfig[permission]?['title'] ??
+                              permission.toString(),
+                          style: const TextStyle(fontWeight: FontWeight.w500),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
               const SizedBox(height: 16),
               ElevatedButton.icon(
                 onPressed: () {
@@ -172,32 +167,28 @@ class _PermissionCheckPageState extends State<PermissionCheckPage> {
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
-              ...StreamPermissionManager.getDeniedPermissions()
-                  .map(
-                    (permission) => Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 4),
-                      child: Row(
-                        children: [
-                          Icon(
-                            _permissionConfig[permission]?['icon'],
-                            color: _permissionConfig[permission]?['color'],
-                            size: 20,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              _permissionConfig[permission]?['title'] ??
-                                  permission.toString(),
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ),
-                        ],
+              ...StreamPermissionManager.getDeniedPermissions().map(
+                (permission) => Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Row(
+                    children: [
+                      Icon(
+                        _permissionConfig[permission]?['icon'],
+                        color: _permissionConfig[permission]?['color'],
+                        size: 20,
                       ),
-                    ),
-                  )
-                  .toList(),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _permissionConfig[permission]?['title'] ??
+                              permission.toString(),
+                          style: const TextStyle(fontWeight: FontWeight.w500),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ],
           ],
         ),
@@ -218,7 +209,6 @@ class _PermissionCheckPageState extends State<PermissionCheckPage> {
   }
 
   void _startStreaming() {
-    // Navigate to streaming page with BLoC already initialized
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
@@ -292,7 +282,7 @@ class _PermissionCheckPageState extends State<PermissionCheckPage> {
                           ),
                           borderRadius: BorderRadius.circular(12),
                           color: isGranted
-                              ? Colors.green.withOpacity(0.1)
+                              ? Colors.green.withValues(alpha: 0.1)
                               : null,
                         ),
                         child: Row(
@@ -300,8 +290,8 @@ class _PermissionCheckPageState extends State<PermissionCheckPage> {
                             Container(
                               padding: const EdgeInsets.all(10),
                               decoration: BoxDecoration(
-                                color: (config['color'] as Color).withOpacity(
-                                  0.1,
+                                color: (config['color'] as Color).withValues(
+                                  alpha: 0.1,
                                 ),
                                 borderRadius: BorderRadius.circular(10),
                               ),
@@ -363,7 +353,7 @@ class _PermissionCheckPageState extends State<PermissionCheckPage> {
                           ],
                         ),
                       );
-                    }).toList(),
+                    }),
                     const Spacer(),
                     if (_allPermissionsGranted)
                       ElevatedButton(

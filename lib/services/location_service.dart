@@ -66,7 +66,7 @@ class LocationService {
       'accuracy': position.accuracy,
       'altitude': position.altitude,
       'speed': position.speed,
-      'timestamp': position.timestamp?.toIso8601String(),
+      'timestamp': position.timestamp.toIso8601String(),
     };
   }
 }

@@ -34,11 +34,11 @@ class StreamLiveBloc extends Bloc<StreamLiveEvent, StreamLiveState> {
       try {
         repository.initializeSocket('wss://bounty-n8fj.onrender.com/');
         await repository.initializeCamera();
+        repository.startLiveBroadcast();
         emit(
           state.copyWith(
-            status: StreamLiveStatus.ready,
-            isSharingLocation:
-                repository.isSharingLocation, // Set initial location state
+            status: StreamLiveStatus.live,
+            isSharingLocation: repository.isSharingLocation,
           ),
         );
       } catch (e) {
