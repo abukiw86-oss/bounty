@@ -72,6 +72,23 @@ wss.on('connection', (ws) => {
                         updateViewerCount(streamId);
                     }
                     break;
+                case 'get_live_list':
+                    // Send current live list to the requesting client
+                    const list = Array.from(activeStreams.values());
+                    ws.send(JSON.stringify({ 
+                        type: 'live_list_update', 
+                        streams: list 
+                    }));
+                    break;
+                case 'location_update':
+                    // Update stream location
+                    if (activeStreams.has(ws.id)) {
+                        const stream = activeStreams.get(ws.id);
+                        stream.location = data.location;
+                        activeStreams.set(ws.id, stream);
+                        sendLiveListUpdates(); // Notify viewers of location change
+                    }
+                    break;
             }
         } catch (error) {
             console.error("Failed to parse incoming message:", error);
@@ -80,15 +97,13 @@ wss.on('connection', (ws) => {
 
     ws.on('close', () => {
         console.log(`🔌 Client disconnected: ${ws.id}`);
-        
-        // If this was a broadcaster, remove their stream
+         
         if (activeStreams.has(ws.id)) {
             activeStreams.delete(ws.id);
             console.log(`❌ Stream Ended: ${ws.id}`);
             sendLiveListUpdates();
         }
-        
-        // Update viewer count if this was a viewer
+         
         if (ws.watchingStreamId) {
             updateViewerCount(ws.watchingStreamId);
         }
@@ -108,8 +123,7 @@ function sendLiveListUpdates() {
         }
     });
 }
-
-// NEW: Function to update viewer count for a stream
+ 
 function updateViewerCount(streamId) {
     if (!streamId) return;
     
