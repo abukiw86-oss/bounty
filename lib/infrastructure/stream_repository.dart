@@ -5,13 +5,16 @@ import 'package:camera/camera.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:image/image.dart' as img;
 import 'package:record/record.dart';
-import '../services/device_info_service.dart'; // Import the device info service
+import 'package:geolocator/geolocator.dart';
+import '../services/device_info_service.dart';
+import '../services/location_service.dart';
 
 class StreamRepository {
   CameraController? _cameraController;
   WebSocketChannel? _channel;
   final AudioRecorder _audioRecorder = AudioRecorder();
   StreamSubscription<Uint8List>? _audioSubscription;
+  StreamSubscription<Position>? _locationSubscription;
 
   bool _isBroadcasting = false;
   int _lastVideoSentTime = 0;
@@ -22,6 +25,10 @@ class StreamRepository {
   String _deviceName = 'Unknown Device';
   String _deviceId = '';
 
+  // Location data
+  Map<String, dynamic>? _currentLocation;
+  bool _isSharingLocation = false;
+
   static const int _videoThrottleMs = 200;
   static const int _skipFrames = 2;
 
@@ -30,6 +37,8 @@ class StreamRepository {
 
   bool get isMuted => _isMuted;
   String get deviceName => _deviceName;
+  Map<String, dynamic>? get currentLocation => _currentLocation;
+  bool get isSharingLocation => _isSharingLocation;
 
   void initializeSocket(String url) {
     try {
@@ -39,8 +48,12 @@ class StreamRepository {
         (message) {
           try {
             final Map<String, dynamic> data = jsonDecode(message);
-            if (data['type'] == 'viewer_update') {
-              onViewerCountChanged?.call(data['count'] ?? 0);
+            switch (data['type']) {
+              case 'viewer_update':
+                onViewerCountChanged?.call(data['count'] ?? 0);
+                break;
+              default:
+                print("Received message type: ${data['type']}");
             }
           } catch (e) {
             print("Error parsing incoming message: $e");
@@ -57,6 +70,9 @@ class StreamRepository {
   Future<void> initializeCamera() async {
     // Get device info first
     await _loadDeviceInfo();
+
+    // Request location permission
+    await _requestLocationPermission();
 
     final cameras = await availableCameras();
     if (cameras.isEmpty) throw Exception("No hardware lenses found.");
@@ -95,6 +111,42 @@ class StreamRepository {
     }
   }
 
+  Future<void> _requestLocationPermission() async {
+    try {
+      await LocationService.checkAndRequestPermission();
+      _isSharingLocation = true;
+      print("📍 Location permission granted");
+    } catch (e) {
+      print("⚠️ Location permission denied: $e");
+      _isSharingLocation = false;
+    }
+  }
+
+  /// Toggle location sharing on/off
+  Future<void> toggleLocationSharing() async {
+    if (_isSharingLocation) {
+      // Stop sharing location
+      _stopLocationUpdates();
+      _isSharingLocation = false;
+      _currentLocation = null;
+      print("📍 Location sharing disabled");
+    } else {
+      // Start sharing location
+      try {
+        await LocationService.checkAndRequestPermission();
+        _isSharingLocation = true;
+        if (_isBroadcasting) {
+          await _getAndUpdateLocation();
+          _startLocationUpdates();
+        }
+        print("📍 Location sharing enabled");
+      } catch (e) {
+        print("Cannot enable location sharing: $e");
+        _isSharingLocation = false;
+      }
+    }
+  }
+
   void startLiveBroadcast() {
     if (_cameraController == null || !_cameraController!.value.isInitialized) {
       return;
@@ -102,22 +154,39 @@ class StreamRepository {
     _isBroadcasting = true;
     _frameCount = 0;
 
-    // Send device info instead of hardcoded name
+    // Get current location before starting
+    if (_isSharingLocation) {
+      _getAndUpdateLocation();
+    }
+
+    // Send device info with location metadata
     final Map<String, dynamic> startPayload = {
       'type': 'start_hosting',
-      'username': _deviceName, // Dynamic device name
-      'deviceId': _deviceId, // Unique device ID
+      'username': _deviceName,
+      'deviceId': _deviceId,
       'platform': _getPlatformInfo(),
+      'location': _currentLocation,
+      'isSharingLocation': _isSharingLocation,
     };
     _channel?.sink.add(jsonEncode(startPayload));
 
     print("🔴 Live broadcast started from: $_deviceName");
+    if (_currentLocation != null) {
+      print(
+        "📍 Initial Location: ${_currentLocation!['latitude']}, ${_currentLocation!['longitude']}",
+      );
+    }
 
     // Start video stream
     _cameraController!.startImageStream(_processVideoFrame);
 
     // Start audio stream
     _startAudioStreaming();
+
+    // Start location updates if permitted
+    if (_isSharingLocation) {
+      _startLocationUpdates();
+    }
   }
 
   Map<String, dynamic> _getPlatformInfo() {
@@ -128,7 +197,65 @@ class StreamRepository {
     };
   }
 
-  // Rest of your methods remain the same...
+  /// Get current location once
+  Future<void> _getAndUpdateLocation() async {
+    try {
+      final position = await LocationService.getCurrentLocation();
+      _currentLocation = LocationService.formatLocation(position);
+      print(
+        "📍 Current location: ${_currentLocation!['latitude']}, ${_currentLocation!['longitude']}",
+      );
+    } catch (e) {
+      print("⚠️ Could not get location: $e");
+      _currentLocation = null;
+    }
+  }
+
+  /// Start real-time location updates
+  void _startLocationUpdates() {
+    _locationSubscription?.cancel();
+
+    // Get initial location
+    _getAndUpdateLocation();
+
+    // Listen for location changes
+    _locationSubscription = LocationService.getLocationStream().listen(
+      (position) {
+        _currentLocation = LocationService.formatLocation(position);
+
+        // Send location update to server
+        _sendLocationUpdate();
+
+        print(
+          "📍 Location updated: ${_currentLocation!['latitude']}, ${_currentLocation!['longitude']}",
+        );
+      },
+      onError: (error) {
+        print("❌ Location stream error: $error");
+      },
+    );
+  }
+
+  /// Send location update to server
+  void _sendLocationUpdate() {
+    if (!_isBroadcasting || _currentLocation == null) return;
+
+    final locationPayload = jsonEncode({
+      'type': 'location_update',
+      'deviceId': _deviceId,
+      'location': _currentLocation,
+      'timestamp': DateTime.now().millisecondsSinceEpoch,
+    });
+
+    _channel?.sink.add(locationPayload);
+  }
+
+  /// Stop location updates
+  void _stopLocationUpdates() {
+    _locationSubscription?.cancel();
+    _locationSubscription = null;
+  }
+
   void _processVideoFrame(CameraImage image) {
     if (!_isBroadcasting) return;
 
@@ -195,7 +322,7 @@ class StreamRepository {
         'type': 'video_frame',
         'frame': base64Frame,
         'timestamp': timestamp,
-        'deviceId': _deviceId, // Include device ID with frames
+        'deviceId': _deviceId,
       });
 
       _channel?.sink.add(framePayload);
@@ -263,6 +390,9 @@ class StreamRepository {
       print("Error stopping audio: $e");
     }
 
+    // Stop location updates
+    _stopLocationUpdates();
+
     if (_channel != null) {
       final Map<String, dynamic> leavePayload = {
         'type': 'leave_stream',
@@ -271,13 +401,17 @@ class StreamRepository {
       _channel!.sink.add(jsonEncode(leavePayload));
       await Future.delayed(const Duration(milliseconds: 100));
     }
+
+    print("🔴 Broadcast stopped");
   }
 
   Future<void> dispose() async {
     await stopBroadcast();
     await _cameraController?.dispose();
     await _audioRecorder.dispose();
+    _locationSubscription?.cancel();
     _channel?.sink.close();
     _cameraController = null;
+    print("♻️ StreamRepository disposed");
   }
 }

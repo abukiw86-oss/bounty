@@ -11,6 +11,8 @@ class StartBroadcastEvent extends StreamLiveEvent {}
 
 class ToggleMuteEvent extends StreamLiveEvent {}
 
+class ToggleLocationSharingEvent extends StreamLiveEvent {}
+
 class StopBroadcastEvent extends StreamLiveEvent {}
 
 class _UpdateViewerCountEvent extends StreamLiveEvent {
@@ -32,7 +34,13 @@ class StreamLiveBloc extends Bloc<StreamLiveEvent, StreamLiveState> {
       try {
         repository.initializeSocket('wss://bounty-n8fj.onrender.com/');
         await repository.initializeCamera();
-        emit(state.copyWith(status: StreamLiveStatus.ready));
+        emit(
+          state.copyWith(
+            status: StreamLiveStatus.ready,
+            isSharingLocation:
+                repository.isSharingLocation, // Set initial location state
+          ),
+        );
       } catch (e) {
         emit(
           state.copyWith(status: StreamLiveStatus.error, error: e.toString()),
@@ -42,11 +50,27 @@ class StreamLiveBloc extends Bloc<StreamLiveEvent, StreamLiveState> {
 
     on<StartBroadcastEvent>((event, emit) {
       repository.startLiveBroadcast();
-      emit(state.copyWith(status: StreamLiveStatus.live));
+      emit(
+        state.copyWith(
+          status: StreamLiveStatus.live,
+          isSharingLocation:
+              repository.isSharingLocation, // Update location state
+        ),
+      );
     });
 
     on<ToggleMuteEvent>((event, emit) {
+      repository.toggleMute();
       emit(state.copyWith(isMuted: !state.isMuted));
+    });
+
+    on<ToggleLocationSharingEvent>((event, emit) async {
+      // FIXED: Call the correct method name
+      await repository.toggleLocationSharing();
+      emit(state.copyWith(isSharingLocation: repository.isSharingLocation));
+      print(
+        "📍 Location sharing: ${repository.isSharingLocation ? 'ON' : 'OFF'}",
+      );
     });
 
     on<_UpdateViewerCountEvent>((event, emit) {
@@ -55,7 +79,13 @@ class StreamLiveBloc extends Bloc<StreamLiveEvent, StreamLiveState> {
 
     on<StopBroadcastEvent>((event, emit) async {
       await repository.stopBroadcast();
-      emit(state.copyWith(status: StreamLiveStatus.ready, viewerCount: 0));
+      emit(
+        state.copyWith(
+          status: StreamLiveStatus.ready,
+          viewerCount: 0,
+          isSharingLocation: false, // Reset location state when stopping
+        ),
+      );
     });
   }
 

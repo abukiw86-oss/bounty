@@ -56,17 +56,6 @@ class FullScreenCameraPreview extends StatelessWidget {
               ),
             );
           }
-
-          return SizedBox.expand(
-            child: FittedBox(
-              fit: BoxFit.cover,
-              child: SizedBox(
-                width: controller.value.previewSize!.height,
-                height: controller.value.previewSize!.width,
-                child: CameraPreview(controller),
-              ),
-            ),
-          );
         }
         return const Center(
           child: Text(
@@ -138,12 +127,14 @@ class TikTokInteractionOverlay extends StatelessWidget {
                 ),
               ],
             ),
+            // In your TikTokInteractionOverlay widget
             BlocBuilder<StreamLiveBloc, StreamLiveState>(
               builder: (context, state) {
                 return Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
                     if (state.status == StreamLiveStatus.live) ...[
+                      // Mute/Unmute button
                       IconButton(
                         icon: Icon(
                           state.isMuted ? Icons.mic_off : Icons.mic,
@@ -154,6 +145,28 @@ class TikTokInteractionOverlay extends StatelessWidget {
                           ToggleMuteEvent(),
                         ),
                       ),
+
+                      IconButton(
+                        icon: Icon(
+                          state.isSharingLocation
+                              ? Icons.location_on
+                              : Icons.location_off,
+                          color: state.isSharingLocation
+                              ? Colors.green
+                              : Colors.white70,
+                          size: 28,
+                        ),
+                        onPressed: () {
+                          context.read<StreamLiveBloc>().add(
+                            ToggleLocationSharingEvent(),
+                          );
+                        },
+                        tooltip: state.isSharingLocation
+                            ? 'Location sharing ON'
+                            : 'Location sharing OFF',
+                      ),
+
+                      // Stop broadcast button
                       IconButton(
                         icon: const Icon(
                           Icons.stop_circle,
